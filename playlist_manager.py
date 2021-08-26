@@ -14,12 +14,10 @@ redirect_uri = 'http://127.0.0.1:8080'
 scope = 'playlist-modify-private'
 
 token = util.prompt_for_user_token(username, scope, client_id, client_secret, redirect_uri)
-# client_credentials_manager = SpotifyClientCredentials(client_id, client_secret, redirect_uri)
-
 sp = spotipy.Spotify(auth=token)
 
-weekly_playlist_id='4KVjL7J08ftGgKUtC4XGYX' #insert your playlist id
-archive_playlist_id='1tYeMCFbT3Mllhwy6DSi3m'
+weekly_playlist_id = config.WEEKLY_ID #insert your playlist id
+archive_playlist_id = config.ARCHIVE_ID
 results = sp.playlist(weekly_playlist_id)
 
 # ========================================================
