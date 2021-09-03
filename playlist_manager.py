@@ -7,6 +7,7 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import spotipy.util as util
 import config
 
+database_file = config.DB_FILE
 username = config.USERNAME
 client_id = config.CLIENT_ID #insert your client id
 client_secret = config.CLIENT_SECRET # insert your client secret id here
@@ -74,7 +75,7 @@ def select_query(conn, the_sql):
 
 def create_db(create_sql):
 
-    conn = create_connection('database/playlist.db')
+    conn = create_connection(database_file)
 
     if conn is not None:
         # create projects table
@@ -108,7 +109,7 @@ def create_tables():
 
 def insert_weekly_tracks(tracks_df):
 
-    conn = create_connection('database/playlist.db')
+    conn = create_connection(database_file)
     
     if conn is not None:
         query=''' INSERT OR IGNORE INTO weekly 
@@ -124,7 +125,7 @@ def insert_weekly_tracks(tracks_df):
 
 def remove_weekly_track(track_id):
     
-    conn = create_connection('database/playlist.db')
+    conn = create_connection(database_file)
 
     insert_sql = ''' DELETE FROM weekly
                         WHERE id = ?;
@@ -139,11 +140,11 @@ def remove_weekly_track(track_id):
 
 def handle_old_tracks():
 
-    conn = create_connection('database/playlist.db')
+    conn = create_connection(database_file)
 
     select_sql = ''' SELECT id, name, album, artist, add_date
                         FROM weekly
-                        WHERE add_date < (SELECT datetime('now','-7 days'));
+                        WHERE add_date < (SELECT datetime('now','-8 days'));
                 '''
 
     tracks = []
@@ -164,7 +165,7 @@ def handle_old_tracks():
     
     if(tracks):
 
-        conn = create_connection('database/playlist.db')
+        conn = create_connection(database_file)
 
         print(rows)
         print("\n\n",tracks)
