@@ -144,7 +144,7 @@ def handle_old_tracks():
 
     select_sql = ''' SELECT id, name, album, artist, add_date
                         FROM weekly
-                        WHERE add_date < (SELECT datetime('now','-8 days'));
+                        WHERE add_date <= (SELECT datetime('now','-7 days'));
                 '''
 
     tracks = []
