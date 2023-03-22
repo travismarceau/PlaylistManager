@@ -1,25 +1,117 @@
+import os
+import random
+import time
+import threading
+import traceback
+from slack_bolt import App
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+from slack_bolt.adapter.socket_mode import SocketModeHandler
+from sqlalchemy import create_engine, MetaData, Table, Column, String, Float, text, Integer
+
 import json
 import sqlite3
 import spotipy
 import datetime
 import pandas as pd
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyOAuth
 import spotipy.util as util
-import config
 
-database_file = config.DB_FILE
-username = config.USERNAME
-client_id = config.CLIENT_ID #insert your client id
-client_secret = config.CLIENT_SECRET # insert your client secret id here
-redirect_uri = 'http://127.0.0.1:8080'
-scope = 'playlist-modify-private'
+from functools import partial
 
-token = util.prompt_for_user_token(username, scope, client_id, client_secret, redirect_uri)
+import logging
+from slack_bolt.middleware import RequestVerification
+
+db_lock = threading.Lock()
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s [%(levelname)s] - %(message)s',
+                    handlers=[logging.StreamHandler()])
+
+
+# ========================================================
+#  Environment Variables
+# ========================================================
+
+DB_FILE = os.environ["DB_FILE"]
+USERNAME = os.environ["USERNAME"]
+CLIENT_ID = os.environ["CLIENT_ID"]
+CLIENT_SECRET = os.environ["CLIENT_SECRET"]
+
+WEEKLY_ID = os.environ["WEEKLY_ID"]
+ARCHIVE_ID = os.environ["ARCHIVE_ID"]
+SCOPE = 'playlist-modify-private'
+
+# ========================================================
+#  Spotify Authentication
+# ========================================================
+
+redirect_uri = 'https://your-heroku-app-name.herokuapp.com/callback'
+
+from spotipy.oauth2 import SpotifyOAuth
+
+sp_oauth = SpotifyOAuth(CLIENT_ID, CLIENT_SECRET, redirect_uri, scope=SCOPE, username=USERNAME)
+token_info = sp_oauth.get_cached_token()
+
+if not token_info:
+    auth_url = sp_oauth.get_authorize_url()
+    print(f"Please navigate here: {auth_url}")
+    print("After you authorize the app, copy the code and run the following command:")
+    print(f"heroku config:set SPOTIPY_AUTH_CODE=<paste_the_code_here> -a your-heroku-app-name")
+
+token = token_info['access_token']
 sp = spotipy.Spotify(auth=token)
 
-weekly_playlist_id = config.WEEKLY_ID #insert your playlist id
-archive_playlist_id = config.ARCHIVE_ID
-results = sp.playlist(weekly_playlist_id)
+RESULTS = sp.playlist(weekly_playlist_id)
+
+# ========================================================
+#  TODO; Slack Integration 
+# ========================================================
+
+# app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
+# slack_client = WebClient(token=SLACK_BOT_TOKEN)
+# handler = SocketModeHandler(app, SLACK_APP_TOKEN)
+
+engine = create_engine(DATABASE_URL)
+metadata = MetaData()
+
+tasks = Table('tasks', metadata,
+              Column('id', Integer, primary_key=True, autoincrement=True),
+              Column('user_id', String),
+              Column('task_name', String),
+              Column('channel_id', String),
+              Column('start_time', Float),
+              Column('end_time', Float),
+              Column('status', String)
+              )
+
+
+metadata.create_all(engine)
+
+def execute_query(query, params=None):
+    with engine.connect() as conn:
+        if params:
+            logging.debug(f"===QUERY==={query} {params}")
+            result = conn.execute(text(query), params)
+        else:
+            result = conn.execute(text(query))
+        return result.fetchall()
+
+
+def execute_commit(query, params=None):
+    with engine.connect() as conn:
+        try:
+            with conn.begin():
+                if params:
+                    logging.debug(f"===QUERY==={query} {params}")
+                    logging.debug(conn.execute(text(query), params))
+                else:
+                    conn.execute(text(query))
+        except Exception as e:
+            logging.error(f"An error occurred while executing the transaction: {e}")
+            logging.error(traceback.format_exc())
+
+
+logging.debug(f"starting app")
 
 # ========================================================
 #  Database Functions
