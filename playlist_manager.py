@@ -32,7 +32,7 @@ logging.basicConfig(level=logging.DEBUG,
 #  Environment Variables
 # ========================================================
 
-DB_FILE = os.environ["DB_FILE"]
+DB_FILE = os.environ["DATABASE_URL"]
 USERNAME = os.environ["USERNAME"]
 CLIENT_ID = os.environ["CLIENT_ID"]
 CLIENT_SECRET = os.environ["CLIENT_SECRET"]
@@ -45,7 +45,7 @@ SCOPE = 'playlist-modify-private'
 #  Spotify Authentication
 # ========================================================
 
-redirect_uri = 'https://your-heroku-app-name.herokuapp.com/callback'
+redirect_uri = 'playlistmanager-production.up.railway.app/callback'
 
 from spotipy.oauth2 import SpotifyOAuth
 
@@ -70,6 +70,10 @@ RESULTS = sp.playlist(weekly_playlist_id)
 # app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 # slack_client = WebClient(token=SLACK_BOT_TOKEN)
 # handler = SocketModeHandler(app, SLACK_APP_TOKEN)
+
+# ========================================================
+#  Database Setup
+# ========================================================
 
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
