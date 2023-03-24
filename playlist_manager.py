@@ -7,7 +7,7 @@ from slack_bolt import App
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-from sqlalchemy import create_engine, MetaData, Table, Column, String, Float, text, Integer
+from sqlalchemy import create_engine, MetaData, Table, Column, String, Float, text, Integer, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -65,13 +65,15 @@ RESULTS = sp.playlist(WEEKLY_ID)
 
 # Define your table classes
 Base = declarative_base()
+
 class Weekly(Base):
     __tablename__ = 'weekly'
     id = Column(String, primary_key=True)
     name = Column(String)
     album = Column(String)
     artist = Column(String)
-    add_date = Column(String)
+    add_date = Column(DateTime)
+
 
 class Archive(Base):
     __tablename__ = 'archive'
@@ -107,15 +109,15 @@ logging.debug(f"starting app")
 def insert_weekly_tracks(engine, tracks_df):
     Session = sessionmaker(bind=engine)
     session = Session()
-    for _, row in tracks_df.iterrows():
-        weekly_track = Weekly(
-            id=row['id'],
-            name=row['name'],
-            album=row['album'],
-            artist=row['artist'],
-            add_date=row['add_date']
+    for _, track in tracks_df.iterrows():
+        new_track = Weekly(
+            id=track["id"],
+            name=track["name"],
+            album=track["album"],
+            artist=track["artist"],
+            add_date=datetime.strptime(track["add_date"], "%Y-%m-%d %H:%M:%S")  # Convert the string to a datetime object
         )
-        session.merge(weekly_track)
+        session.merge(new_track)
     session.commit()
 
 def remove_weekly_track(engine, track_id):
