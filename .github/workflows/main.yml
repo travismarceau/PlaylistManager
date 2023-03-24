@@ -24,7 +24,7 @@ jobs:
 
     - name: Run script
       env:
-        DATABASE_URL: ${{ secrets.POSTGRES_URL }}
+        POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
         CLIENT_ID: ${{ secrets.CLIENT_ID }}
         CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         WEEKLY_ID: ${{ secrets.WEEKLY_ID }}
