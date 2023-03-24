@@ -3,7 +3,7 @@ name: Run Playlist Manager
 on:
   schedule:
     # Runs every 3 hours
-    - cron: '*/5 * * * *'
+    - cron: '* */12 * * *'
 
 jobs:
   run-script:
