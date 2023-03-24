@@ -8,14 +8,16 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Float, text, Integer
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 import json
 import sqlite3
-import spotipy
-import datetime
+from datetime import datetime, timedelta
 import pandas as pd
-from spotipy.oauth2 import SpotifyOAuth
-import spotipy.util as util
+
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 
 from functools import partial
 
@@ -32,8 +34,7 @@ logging.basicConfig(level=logging.DEBUG,
 #  Environment Variables
 # ========================================================
 
-DB_FILE = os.environ["DATABASE_URL"]
-USERNAME = os.environ["USERNAME"]
+DB_FILE = os.environ["POSTGRES_URL"]
 CLIENT_ID = os.environ["CLIENT_ID"]
 CLIENT_SECRET = os.environ["CLIENT_SECRET"]
 
@@ -45,23 +46,10 @@ SCOPE = 'playlist-modify-private'
 #  Spotify Authentication
 # ========================================================
 
-redirect_uri = 'playlistmanager-production.up.railway.app/callback'
+client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
-from spotipy.oauth2 import SpotifyOAuth
-
-sp_oauth = SpotifyOAuth(CLIENT_ID, CLIENT_SECRET, redirect_uri, scope=SCOPE, username=USERNAME)
-token_info = sp_oauth.get_cached_token()
-
-if not token_info:
-    auth_url = sp_oauth.get_authorize_url()
-    print(f"Please navigate here: {auth_url}")
-    print("After you authorize the app, copy the code and run the following command:")
-    print(f"heroku config:set SPOTIPY_AUTH_CODE=<paste_the_code_here> -a your-heroku-app-name")
-
-token = token_info['access_token']
-sp = spotipy.Spotify(auth=token)
-
-RESULTS = sp.playlist(weekly_playlist_id)
+RESULTS = sp.playlist(WEEKLY_ID)
 
 # ========================================================
 #  TODO; Slack Integration 
@@ -75,45 +63,40 @@ RESULTS = sp.playlist(weekly_playlist_id)
 #  Database Setup
 # ========================================================
 
-engine = create_engine(DATABASE_URL)
-metadata = MetaData()
+# Define your table classes
+Base = declarative_base()
+class Weekly(Base):
+    __tablename__ = 'weekly'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    album = Column(String)
+    artist = Column(String)
+    add_date = Column(String)
 
-tasks = Table('tasks', metadata,
-              Column('id', Integer, primary_key=True, autoincrement=True),
-              Column('user_id', String),
-              Column('task_name', String),
-              Column('channel_id', String),
-              Column('start_time', Float),
-              Column('end_time', Float),
-              Column('status', String)
-              )
+class Archive(Base):
+    __tablename__ = 'archive'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    album = Column(String)
+    artist = Column(String)
+    add_date = Column(String)
 
+def create_connection(database_url):
+    engine = create_engine(database_url)
+    Base.metadata.create_all(engine)
+    return engine
 
-metadata.create_all(engine)
+def create_tables(database_url):
+    engine = create_connection(database_url)
 
-def execute_query(query, params=None):
-    with engine.connect() as conn:
-        if params:
-            logging.debug(f"===QUERY==={query} {params}")
-            result = conn.execute(text(query), params)
+def execute_query(engine, query, args=None):
+    with engine.connect() as connection:
+        if args:
+            result = connection.execute(query, args)
         else:
-            result = conn.execute(text(query))
-        return result.fetchall()
-
-
-def execute_commit(query, params=None):
-    with engine.connect() as conn:
-        try:
-            with conn.begin():
-                if params:
-                    logging.debug(f"===QUERY==={query} {params}")
-                    logging.debug(conn.execute(text(query), params))
-                else:
-                    conn.execute(text(query))
-        except Exception as e:
-            logging.error(f"An error occurred while executing the transaction: {e}")
-            logging.error(traceback.format_exc())
-
+            result = connection.execute(query)
+        rows = result.fetchall()
+    return rows
 
 logging.debug(f"starting app")
 
@@ -121,216 +104,76 @@ logging.debug(f"starting app")
 #  Database Functions
 # ========================================================
 
-def create_connection(db_file):
-    """ create a database connection to a SQLite database """
-    conn = None
-    try:
-        # print(sqlite3.version)
-        conn = sqlite3.connect(db_file,detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
-    except sqlite3.Error as e:
-        print(e)
+def insert_weekly_tracks(engine, tracks_df):
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    for _, row in tracks_df.iterrows():
+        weekly_track = Weekly(
+            id=row['id'],
+            name=row['name'],
+            album=row['album'],
+            artist=row['artist'],
+            add_date=row['add_date']
+        )
+        session.merge(weekly_track)
+    session.commit()
 
-    return conn
+def remove_weekly_track(engine, track_id):
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    track = session.query(Weekly).filter(Weekly.id == track_id).one()
+    session.delete(track)
+    session.commit()
 
-def no_args_query(conn, the_sql):
-    """ run query - no args - no return """
-    try:
-        c = conn.cursor()
-        c.execute(the_sql)
-        conn.commit()
-    except sqlite3.Error as e:
-        print(e)
-    finally:
-        conn.close()
+def handle_old_tracks(engine, sp, weekly_playlist_id, archive_playlist_id):
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
-def args_query(conn, the_sql, args):
-    """ run query - with args - no return """
-    try:
-        c = conn.cursor()
-        c.execute(the_sql, args)
-        conn.commit()
-    except sqlite3.Error as e:
-        print(e)
-    finally:
-        conn.close()
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    old_tracks = session.query(Weekly).filter(Weekly.add_date <= seven_days_ago).all()
 
-def select_query(conn, the_sql):
-    """ select and return statement - no args """
-    rows = None
-    try:
-        c = conn.cursor()
-        c.execute(the_sql)
-        rows = c.fetchall()
-        c.close()
-    except sqlite3.Error as e:
-        print(e)
-        return
-    finally:
-        conn.close()
-        return rows
-
-def create_db(create_sql):
-
-    conn = create_connection(database_file)
-
-    if conn is not None:
-        # create projects table
-        no_args_query(conn, create_sql)
+    if old_tracks:
+        print("\n---To the archive!---")
+        for ot in old_tracks:
+            print(ot)
+            archive_track = Archive(
+                id=ot.id,
+                name=ot.name,
+                album=ot.album,
+                artist=ot.artist,
+                add_date=ot.add_date
+            )
+            session.merge(archive_track)
+            session.delete(ot)
+            sp.playlist_remove_all_occurrences_of_items(weekly_playlist_id, ['spotify:track:' + ot.id])
+            sp.playlist_remove_all_occurrences_of_items(archive_playlist_id, ['spotify:track:' + ot.id])
+            sp.playlist_add_items(archive_playlist_id, ['spotify:track:' + ot.id])
+        session.commit()
         return True
-
     else:
         print("Error! cannot create the database connection.")
         return False
 
-def create_tables():
+def get_new_songs(sp, results):
+    ids = [item['track']['id'] for item in results['tracks']['items']]
 
-    create_weekly = '''CREATE TABLE IF NOT EXISTS weekly (
-                            id text PRIMARY KEY NOT NULL,
-                            name text,
-                            album text,
-                            artist text,
-                            add_date text);
-                            '''
-
-    create_archive = '''CREATE TABLE IF NOT EXISTS archive (
-                            id text PRIMARY KEY NOT NULL,
-                            name text,
-                            album text,
-                            artist text,
-                            add_date text);
-                            '''
-
-    create_db(create_weekly)
-    create_db(create_archive)
-
-def insert_weekly_tracks(tracks_df):
-
-    conn = create_connection(database_file)
-    
-    if conn is not None:
-        query=''' INSERT OR IGNORE INTO weekly 
-                    (id, name, album, artist, add_date) 
-                    VALUES (?,?,?,?,?); '''
-        conn.executemany(query, tracks_df.to_records(index=False))
-        conn.commit()
-        return True
-
-    else:
-        print("Error! cannot create the database connection.")
-        return False
-
-def remove_weekly_track(track_id):
-    
-    conn = create_connection(database_file)
-
-    insert_sql = ''' DELETE FROM weekly
-                        WHERE id = ?;
-                '''
-    if conn is not None:
-        args_query(conn, insert_sql, track_id)
-        return True
-
-    else:
-        print("Error! cannot create the database connection.")
-        return False
-
-def handle_old_tracks():
-
-    conn = create_connection(database_file)
-
-    select_sql = ''' SELECT id, name, album, artist, add_date
-                        FROM weekly
-                        WHERE add_date <= (SELECT datetime('now','-7 days'));
-                '''
-
-    tracks = []
-    json_tracks = []
-    if conn is not None:
-        rows = select_query(conn, select_sql)
-        if(rows):
-            print("\n---To the archive!---")
-            for ot in rows:
-                print(ot)
-                tracks.append([ot[0]])
-                json_tracks.append('spotify:track:'+ot[0])
-                # insert_archive_track(ot)
-    
-    else:
-        print("Error! cannot create the database connection.")
-        return False
-    
-    if(tracks):
-
-        conn = create_connection(database_file)
-
-        print(rows)
-        print("\n\n",tracks)
-
-        if conn is not None:
-            query=''' INSERT OR REPLACE INTO archive 
-                        (id, name, album, artist, add_date) 
-                        VALUES (?,?,?,?,?); '''
-            conn.executemany(query, rows)
-
-            delete_sql = ''' DELETE FROM weekly
-                        WHERE id = ?; '''
-            conn.executemany(delete_sql, tracks)
-            conn.commit()
-
-            sp.playlist_remove_all_occurrences_of_items(weekly_playlist_id, json_tracks)
-            sp.playlist_remove_all_occurrences_of_items(archive_playlist_id, json_tracks)
-            sp.playlist_add_items(archive_playlist_id, json_tracks)
-            return True
-
-        else:
-            print("Error! cannot create the database connection.")
-            return False
-
-        
-
-def get_new_songs():
-    # create a list of song ids
-    ids=[]
-
-    for item in results['tracks']['items']:
-            track = item['track']['id']
-            ids.append(track)
-            
-    song_meta={'id':[],'album':[], 'name':[], 
-            'artist':[]}
+    song_meta = {'id': [], 'album': [], 'name': [], 'artist': []}
 
     for song_id in ids:
-        # get song's meta data
         meta = sp.track(song_id)
-        
-        # song id
+
         song_meta['id'].append(song_id)
+        song_meta['album'].append(meta['album']['name'])
+        song_meta['name'].append(meta['name'])
+        song_meta['artist'].append(', '.join([singer_name['name'] for singer_name in meta['artists']]))
 
-        # album name
-        album=meta['album']['name']
-        song_meta['album']+=[album]
-
-        # song name
-        song=meta['name']
-        song_meta['name']+=[song]
-        
-        # artists name
-        s = ', '
-        artist=s.join([singer_name['name'] for singer_name in meta['artists']])
-        song_meta['artist']+=[artist]
-
-        # # date added
-        # song
-
-    tracks_df=pd.DataFrame.from_dict(song_meta)
-    tracks_df['add_date'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-    #     print(tracks_df)
+    tracks_df = pd.DataFrame.from_dict(song_meta)
+    tracks_df['add_date'] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     return tracks_df
 
-create_tables()
+
+create_tables(DB_FILE)
 track_df = get_new_songs()
 insert_weekly_tracks(track_df)
 handle_old_tracks()
