@@ -7,9 +7,9 @@ from slack_bolt import App
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-from sqlalchemy import create_engine, MetaData, Table, Column, String, Float, text, Integer, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, Column, String, DateTime
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.exc import ProgrammingError
 
 import json
 import sqlite3
@@ -34,7 +34,7 @@ logging.basicConfig(level=logging.DEBUG,
 #  Environment Variables
 # ========================================================
 
-DB_FILE = os.environ["POSTGRES_URL"]
+DB_FILE = "sqlite:///data/playlist_manager.db"
 CLIENT_ID = os.environ["CLIENT_ID"]
 CLIENT_SECRET = os.environ["CLIENT_SECRET"]
 
