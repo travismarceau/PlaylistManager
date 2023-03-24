@@ -86,7 +86,7 @@ def create_connection(database_url):
     Base.metadata.create_all(engine)
     return engine
 
-def create_tables(database_url):
+def create_tables(engine, database_url):
     engine = create_connection(database_url)
 
 def execute_query(engine, query, args=None):
@@ -172,9 +172,9 @@ def get_new_songs(sp, results):
 
     return tracks_df
 
-
-create_tables(DB_FILE)
-track_df = get_new_songs()
-insert_weekly_tracks(track_df)
-handle_old_tracks()
+engine = create_connection(DB_FILE)
+create_tables(engine, DB_FILE)
+track_df = get_new_songs(sp, RESULTS)
+insert_weekly_tracks(engine, track_df)
+handle_old_tracks(engine, sp, WEEKLY_ID, ARCHIVE_ID)
 
