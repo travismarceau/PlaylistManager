@@ -13,6 +13,8 @@ payload = {
 }
 
 response = requests.post(auth_url, data=payload)
+print(f"Response status: {response.status_code}")
+print(f"Response content: {response.content}")
 response_data = response.json()
 
 device_code = response_data["device_code"]
@@ -34,6 +36,7 @@ while True:
         "client_id": CLIENT_ID,
         "device_code": device_code,
     }
+
     response = requests.post(token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET))
     print(f"Response status: {response.status_code}")
     print(f"Response content: {response.content}")
