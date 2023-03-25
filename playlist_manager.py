@@ -16,8 +16,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import pandas as pd
 
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy import SpotifyOAuth
 
 from functools import partial
 
@@ -37,6 +36,7 @@ logging.basicConfig(level=logging.DEBUG,
 DB_FILE = "sqlite:///data/playlist_manager.db"
 CLIENT_ID = os.environ["CLIENT_ID"]
 CLIENT_SECRET = os.environ["CLIENT_SECRET"]
+REDIRECT_URI = os.environ["REDIRECT_URI"]
 
 WEEKLY_ID = os.environ["WEEKLY_ID"]
 ARCHIVE_ID = os.environ["ARCHIVE_ID"]
@@ -46,8 +46,11 @@ SCOPE = 'playlist-modify-private'
 #  Spotify Authentication
 # ========================================================
 
-client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+# Spotify Authentication with required scopes
+sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=CLIENT_ID,
+                                               client_secret=CLIENT_SECRET,
+                                               redirect_uri=REDIRECT_URI,
+                                               scope=SCOPE))
 
 RESULTS = sp.playlist(WEEKLY_ID)
 
