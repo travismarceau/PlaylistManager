@@ -22,7 +22,7 @@ on:
       #   required: true
   schedule:
     # Runs every 3 hours
-    - cron: '*/5 * * * *'
+    - cron: '* */8 * * *'
 
 jobs:
   run-script:
