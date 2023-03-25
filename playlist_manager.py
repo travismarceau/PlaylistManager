@@ -115,7 +115,7 @@ def insert_weekly_tracks(engine, tracks_df):
             name=track["name"],
             album=track["album"],
             artist=track["artist"],
-            add_date=datetime.strptime(track["add_date"], "%Y-%m-%d %H:%M:%S")  # Convert the string to a datetime object
+            add_date=datetime.strptime(track["add_date"], "%Y-%m-%d %H:%M")  # Convert the string to a datetime object
         )
         session.merge(new_track)
     session.commit()
