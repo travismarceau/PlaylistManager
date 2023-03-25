@@ -16,6 +16,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import pandas as pd
 
+import spotipy
 from spotipy import SpotifyOAuth
 
 from functools import partial
