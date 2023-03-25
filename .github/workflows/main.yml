@@ -49,4 +49,4 @@ jobs:
         CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         WEEKLY_ID: ${{ secrets.WEEKLY_ID }}
         ARCHIVE_ID: ${{ secrets.ARCHIVE_ID }}
-      run: python playlist_manager.py
+      run: python auth.py
