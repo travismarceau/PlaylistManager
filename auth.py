@@ -35,6 +35,11 @@ while True:
         "device_code": device_code,
     }
     response = requests.post(token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET))
+    print(f"Response status: {response.status_code}")
+    print(f"Response content: {response.content}")
+
+    response_data = response.json()
+
     
     if response.status_code == 200:
         token_data = response.json()
