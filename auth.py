@@ -6,13 +6,21 @@ CLIENT_ID = os.environ["CLIENT_ID"]
 CLIENT_SECRET = os.environ["CLIENT_SECRET"]
 
 # Device Flow: Step 1 - Get the device code
-auth_url = "https://accounts.spotify.com/api/device_authorization"
-payload = {
-    "client_id": CLIENT_ID,
-    "scope": "playlist-modify-private",
-}
+auth_url = f"https://accounts.spotify.com/authorize?client_id={CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&scope={SCOPE}"
+print(f"URL: {auth_url}")
 
-response = requests.post(auth_url, data=payload)
+response = requests.get(auth_url)
+print("Response content:", response.content)
+
+response_data = response.json()
+
+# auth_url = "https://accounts.spotify.com/api/device_authorization"
+# payload = {
+#     "client_id": CLIENT_ID,
+#     "scope": "playlist-modify-private",
+# }
+
+# response = requests.post(auth_url, data=payload)
 print(f"Response status: {response.status_code}")
 print(f"Response content: {response.content}")
 response_data = response.json()
