@@ -131,7 +131,7 @@ def handle_old_tracks(engine, sp, weekly_playlist_id, archive_playlist_id):
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    seven_days_ago = datetime.now() - timedelta(minutes=1)
+    seven_days_ago = datetime.now() + timedelta(day=1)
     # seven_days_ago = datetime.now() - timedelta(days=7)
     old_tracks = session.query(Weekly).filter(Weekly.add_date <= seven_days_ago).all()
 
@@ -154,7 +154,7 @@ def handle_old_tracks(engine, sp, weekly_playlist_id, archive_playlist_id):
         session.commit()
         return True
     else:
-        print("Error! cannot create the database connection.")
+        print("No old tracks found to move to the archive.")
         return False
 
 def get_new_songs(sp, results):
